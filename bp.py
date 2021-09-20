@@ -8,8 +8,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from cirq.contrib.svg import SVGCircuit
 
-def generate_random_qnn(qubits, symbol, depth):
+def generate_random_qnn(qubits, symbol, depth, noisy = False):
     circuit = cirq.Circuit()
+    if noisy:
+        circuit = circuit.with_noise(cirq.depolarize(0.05))
     for qubit in qubits:
         circuit += cirq.ry(np.pi/4)(qubit)
 
@@ -30,7 +32,7 @@ def generate_random_qnn(qubits, symbol, depth):
 
     return circuit
 
-generate_random_qnn(cirq.GridQubit.rect(1, 3), sympy.Symbol('theta'), 2)
+#generate_random_qnn(cirq.GridQubit.rect(1, 3), sympy.Symbol('theta'), 2)
 
 def process_batch(circuits, symbol, op):
     expectation = tfq.layers.Expectation()
@@ -46,10 +48,11 @@ def process_batch(circuits, symbol, op):
     grad_var = tf.math.reduce_std(grads, axis=0)
     return grad_var.numpy()[0]
 
-n_qubits = [2]# * i for i in range(2, 7)]
+n_qubits = [2*i for i in range(2, 7)]
 depth = 50
 n_circuits = 200
 theta_var = []
+theta_var_noisy = []
 
 for n in n_qubits:
     qubits = cirq.GridQubit.rect(1, n)
@@ -58,9 +61,18 @@ for n in n_qubits:
     op = cirq.Z(qubits[0]) * cirq.Z(qubits[1])
     theta_var.append(process_batch(circuits, symbol, op))
 
-print(cirq.final_density_matrix(circuits[0]))
-#plt.semilogy(n_qubits, theta_var)
-#plt.title('Gradient Variance in QNNs')
-#plt.xlabel('n_qubits')
-#plt.ylabel('$\\partial \\theta$ variance')
-#plt.show()
+for n in n_qubits:
+    qubits = cirq.GridQubit.rect(1, n)
+    symbol = sympy.Symbol('theta')
+    circuits = [generate_random_qnn(qubits, symbol, depth, noisy = True) for _ in range(n_circuits)]
+    op = cirq.Z(qubits[0]) * cirq.Z(qubits[1])
+    theta_var_noisy.append(process_batch(circuits, symbol, op))
+
+
+#print(cirq.final_density_matrix(circuits[0]))
+plt.semilogy(n_qubits, theta_var)
+plt.semilogy(n_qubits, theta_var_noisy)
+plt.title('Gradient Variance in QNNs')
+plt.xlabel('n_qubits')
+plt.ylabel('$\\partial \\theta$ variance')
+plt.show()
