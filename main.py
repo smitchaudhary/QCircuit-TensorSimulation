@@ -1,7 +1,7 @@
 import jet
 import cirq
 import numpy as np
-from tools import *
+from utils import *
 
 fids = []
 n_qubits_array = [2, 3, 4, 5, 6]

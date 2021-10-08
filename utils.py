@@ -1,6 +1,7 @@
 #import jet
 import numpy as np
 import cirq
+import matplotlib.pyplot as plt
 
 def generate_random_qnn(qubits, angles, paulis, depth, initial_state = "0", noisy = False, noise = None):
     circuit = cirq.Circuit()
@@ -42,7 +43,7 @@ class Correlated_Dephasing(cirq.TwoQubitGate):
         return 2
 
     def _mixture_(self):
-        ps = [self._p, self._p, self._p, 1.0 - self._p]
+        ps = [self._p, self._p, self._p, 1.0 - 3*self._p]
         ops = [cirq.unitary(cirq.X)*cirq.unitary(cirq.X), cirq.unitary(cirq.Y)*cirq.unitary(cirq.Y), cirq.unitary(cirq.Z)*cirq.unitary(cirq.Z), cirq.unitary(cirq.I)*cirq.unitary(cirq.I)]
         return tuple(zip(ps, ops))
 
@@ -57,3 +58,13 @@ class MyGateDepolarizingNoiseModel(cirq.NoiseModel):
         if isinstance(op.gate, MyGate):
             return [op, cirq.depolarize(p).on(op.qubits[0])]
         return op
+
+def make_histogram(data, threshold = 0.9):
+    edges = [0.1*i for i in range(10)]
+    temp_edges = [0.9 + 0.01*(i+1) for i in range(10) ]
+    edges = edges + temp_edges
+    plt.hist(data, bins = edges, range = (0,1), density = True)
+    plt.axvline(x=threshold, color = 'r')
+    #hist, edges = np.histogram(data, bins = edges, range = (0,1), density = True)
+    plt.show()
+    #return histogram
