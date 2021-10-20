@@ -2,6 +2,22 @@
 import numpy as np
 import cirq
 import matplotlib.pyplot as plt
+import sympy as sp
+
+I = np.array([[1, 0],#
+              [0, 1]])
+
+X = np.array([[0, 1],#
+              [1, 0]])
+
+Y = np.array([[0, -1j],#
+              [1j, 0]])
+
+Z = np.array([[1, 0],#
+              [0, -1]])
+
+paulis = {'0' : I, '1' : X, '2' : Y, '3' : Z}
+
 
 def generate_random_qnn(qubits, angles, paulis, depth, initial_state = "0", noisy = False, noise_model = None):
     '''
@@ -49,8 +65,8 @@ def generate_random_qnn(qubits, angles, paulis, depth, initial_state = "0", nois
 
     for d in range(depth):
         for i, qubit in enumerate(qubits):
-            random_n = np.random.random()
-            random_rot = 2*np.pi*np.random.random()
+            #random_n = np.random.random()
+            #random_rot = 2*np.pi*np.random.random()
 
             if paulis[d, i] == 0:
                 circuit += cirq.rz(angles[d, i])(qubit)
@@ -152,10 +168,177 @@ def make_histogram(data, threshold = 0.9):
         None
     '''
     edges = [0.1*i for i in range(10)]
-    temp_edges = [0.9 + 0.01*(i+1) for i in range(10) ]
+    temp_edges = [0.9 + 0.01*(i+1) for i in range(9) ]
     edges = edges + temp_edges
+    temp_edges = [0.99 + 0.001*(i+1) for i in range(100)]
+    edges = edges + temp_edges
+    print(edges)
     plt.hist(data, bins = edges, range = (0,1), density = True)
     plt.axvline(x=threshold, color = 'r')
     #hist, edges = np.histogram(data, bins = edges, range = (0,1), density = True)
     plt.show()
     #return histogram
+
+def random_initial_state(n_qubits):
+    '''
+    Add description here
+    '''
+    pass
+    #print(n_qubits)
+    #print(type(n_qubits))
+    RC = np.random.randn(2**n_qubits, 2**n_qubits) + 1j*np.random.randn(2**n_qubits, 2**n_qubits)
+    q, r = np.linalg.qr(RC)
+    d = np.diag(r)
+    ph = d/np.abs(d)
+    q = q*ph
+    init_state = np.array([0 for i in range(2**n_qubits)])
+    init_state[0] = 1
+    rand_state = np.matmul(q, init_state)
+    return rand_state
+
+def operational_to_channel(rho = None, operation_dictionary = None, n_qubits = None, symbolic = False):
+    if not symbolic:
+        n_qubits = int(np.log2(len(rho)))
+        assert rho != None, "Not a symbolic calculation. Need to provide the current density matrix."
+        if not operation_dictionary:
+            print(f'No noise applied since no operations are given.')
+            #operation_dictionary = {}
+            #operation_dictionary['0'] = 1
+            return rho
+        total_prob = 0
+        for pauli_string in operation_dictionary:
+            total_prob += operation_dictionary[pauli_string]
+        assert total_prob == 1, "Check the probability of each operation. The total probability needs to be 1"
+        if isinstance(rho, dict):
+            rho_decomposition = dict(rho)
+        else:
+            rho_decomposition = pauli_decomposition(rho, verbose = False)
+        new_rho_decomposition = {}
+        for component in rho_decomposition:
+            new_rho_decomposition[component] = 0
+            for pauli_string in operation_dictionary:
+                new_rho_decomposition[component] += rho_decomposition[component]*commute_or_anti_commute(component, pauli_string)*operation_dictionary[pauli_string]
+        return new_rho_decomposition
+    else:
+        assert n_qubits != None, "If rho is not given explicitly, you have to provide the number of qubits."
+        rho, rho_decomposition = symbolic_rho(n_qubits)
+        new_rho_decomposition = {}
+        for component in rho_decomposition:
+            new_rho_decomposition[component] = 0
+            for pauli_string in operation_dictionary:
+                new_rho_decomposition[component] += rho_decomposition[component]*commute_or_anti_commute(component, pauli_string)*operation_dictionary[pauli_string]
+        return new_rho_decomposition
+
+
+def generate_all_pauli_strings(n_qubits = 1):
+    '''
+    Generates all 4**n_qubits paulis trings for any n_qubit.
+    Parameters:
+        n_qubits : int
+            Number of qubits in the system. 1 by default.
+    Returns:
+        indices : list
+            A list with all indices with appropriate padding.
+    '''
+    indices = [np.base_repr(i, base = 4, padding = (n_qubits - len(np.base_repr(i, base = 4)))) for i in range(4**n_qubits)]
+    indices[0] = '0'*n_qubits
+    return indices
+
+def pauli_decomposition(M, verbose = False):
+    '''
+    Deconstructs any 2D square matrix of dimensions 2**n_qubits into sum of Pauli strings.
+    Parameters:
+        M : np.ndarray
+            The matrix that is to be decomposed.
+        verbose : bool
+            False by default. If True, it outputs 0 components as well.
+    Returns :
+        decomposition : dict
+            Dictionary with paulis string as key and the corresponding component as the value.
+    '''
+    size = np.shape(M)
+    assert size[0] == size[1] and len(size) == 2, "Please provide a 2D square matrix."
+    n_qubits = int(np.log2(size[0]))
+    assert np.log2(size[0]) - n_qubits == 0, "The matrix must have the dimensions 2**n_qubits"
+    pauli_strings = generate_all_pauli_strings(n_qubits = n_qubits)
+    decomposition = {}
+    for string in pauli_strings:
+        A = matrix_from_index_string(string)
+        component = np.trace(np.matmul(A, M))/2**n_qubits
+        if verbose or component:
+            decomposition[string] = component
+    return decomposition
+
+def matrix_recomposition(pauli_components):
+    '''
+    Reconstructs full 2D matrix based on the Pauli components given.
+    Parameters:
+        pauli_components : dict
+            Dictionarty containing the pauli string in index form as key and the component as the value.
+    Returns:
+        M : np.ndarray
+            The finaly matrix corresponding to the components given.
+    '''
+    M = 0
+    for string in pauli_components:
+        A = matrix_from_index_string(string)
+        M += pauli_components[string]*A
+    return M
+
+def matrix_from_index_string(string):
+    '''
+    Gives you an explicit 2D matrix based on the Pauli string.
+    Position of the index determines on which qubit.
+    0 : I
+    1 : X
+    2 : Y
+    3 : Z
+    Parameters:
+        string : str
+            String of indices for the Pauli string.
+    Returns:
+        mat : np.ndarray
+            2D array that is the explicit matrix for the pauli string given. 
+    '''
+    mat = [1]
+    for pauli in string:
+        mat = np.kron(mat, paulis[pauli])
+    return mat
+
+def commute_or_anti_commute(string1, string2):
+    '''
+    Tells you if two pauli strings commute or anti commute.
+    Outputs 1 if they commute and -1 if they do not.
+    Paramters :
+        string1 : str
+            First Pauli string
+        string2 : str
+            Second Pauli string
+    Returns : 
+        ans : int
+            ans = 1 if the two strings commute and ans = -1 if they anti commute.
+    '''
+    assert len(string1) == len(string2), "The two strings have to be same length to compare"
+    ans = 1
+    for i in range(len(string1)):
+        if string1[i] == '0' or string2[i] == '0' or string1[i] == string2[i]:
+            continue
+        ans *= -1
+    return ans
+
+def symbolic_rho(n_qubits):
+    paulis_strings = generate_all_pauli_strings(n_qubits)
+    rho = 0
+    rho_decomposition = {}
+    for string in paulis_strings:
+        if string == '0'*n_qubits:
+            pauli = sp.Symbol('P_'+string)
+            component = 1/2**n_qubits
+            rho += pauli*component
+            rho_decomposition[string] = 1/2**n_qubits
+        else:
+            pauli = sp.Symbol('P_'+string)
+            component = sp.Symbol('rho_'+string)
+            rho += pauli*component
+            rho_decomposition[string] = component
+    return rho, rho_decomposition
