@@ -4,18 +4,23 @@ import cirq
 import matplotlib.pyplot as plt
 import sympy as sp
 
+# Identity Gate
 I = np.array([[1, 0],#
               [0, 1]])
 
+# X Gate
 X = np.array([[0, 1],#
               [1, 0]])
 
+# Y Gate
 Y = np.array([[0, -1j],#
               [1j, 0]])
 
+#Z Gate
 Z = np.array([[1, 0],#
               [0, -1]])
 
+# Dictionary containing the Pauli Gates
 paulis = {'0' : I, '1' : X, '2' : Y, '3' : Z}
 
 
@@ -25,7 +30,7 @@ def generate_random_qnn(qubits, angles, paulis, depth, initial_state = "0", nois
         Adds single qubit rotations by a random angle about a random axis.
         Followed by CZ gates on each neighbouring pair.
         This is repeated depth times.
-    
+
     Parameters:
         qubits : list
             List of qubit objects
@@ -44,7 +49,7 @@ def generate_random_qnn(qubits, angles, paulis, depth, initial_state = "0", nois
             Defaults to False. Gives whether the circuit is noisy or not.
         noise_model : cirq Noise Model
             Defaults to None. Noise model of the circuit if any.
-    
+
     Returns:
         circuit : cirq Circuit
             The random circuit created.
@@ -87,7 +92,7 @@ def I_d(n_qubits):
     Parameters:
         n_qubits : int
             Number of qubits.
-    
+
     Returns:
         np.ndarray
             The maximally mixed state of n_qubits qubits.
@@ -97,7 +102,7 @@ def I_d(n_qubits):
 class Correlated_Dephasing(cirq.TwoQubitGate):
     '''
     Derived from cirq's TwoQubitGate class.
-    Implements a channel with 
+    Implements a channel with
     '''
     def __init__(self, p: float) -> None:
         '''
@@ -163,7 +168,7 @@ def make_histogram(data, threshold = 0.9):
             Data that is to be plotted.
         threshold : float
             The threshold for the vertical line. Defaults to 0.9.
-    
+
     Returns:
         None
     '''
@@ -181,11 +186,14 @@ def make_histogram(data, threshold = 0.9):
 
 def random_initial_state(n_qubits):
     '''
-    Add description here
+    Produces an n-qubit random superposition state.
+    Parameters :
+        n_qubits : int
+            Number of qubits in the system
+    Returns :
+        rand_state : np.ndarray
+            A random n_qubit quantum state
     '''
-    pass
-    #print(n_qubits)
-    #print(type(n_qubits))
     RC = np.random.randn(2**n_qubits, 2**n_qubits) + 1j*np.random.randn(2**n_qubits, 2**n_qubits)
     q, r = np.linalg.qr(RC)
     d = np.diag(r)
@@ -197,6 +205,22 @@ def random_initial_state(n_qubits):
     return rand_state
 
 def operational_to_channel(rho = None, operation_dictionary = None, n_qubits = None, symbolic = False):
+    '''
+    From the operational definitio of a channel, such as apply X, Y, Z with probability p and do nothing with probability 1-p,
+    it gives the channel form that gives how the density matrix evolves.
+    Parameters :
+        rho : np.ndarray or None
+            The density matrix of the system. Either given in form of a 2D array or treated as symbolic rho by default.
+        operation_dictionary : dict
+            The Dictionary containing what noise to apply with what probability.
+        n_qubit : int
+            Number of qubits in the system. If not given, and rho is not symbolic, deduced from the size of rho.
+        symbolic : bool
+            A boolean indicating if rho is symbolic or given as an array.
+    Returns :
+        new_rho_decomposition : dict
+            The new density matrix
+    '''
     if not symbolic:
         n_qubits = int(np.log2(len(rho)))
         assert rho != None, "Not a symbolic calculation. Need to provide the current density matrix."
@@ -298,7 +322,7 @@ def matrix_from_index_string(string):
             String of indices for the Pauli string.
     Returns:
         mat : np.ndarray
-            2D array that is the explicit matrix for the pauli string given. 
+            2D array that is the explicit matrix for the pauli string given.
     '''
     mat = [1]
     for pauli in string:
@@ -309,12 +333,12 @@ def commute_or_anti_commute(string1, string2):
     '''
     Tells you if two pauli strings commute or anti commute.
     Outputs 1 if they commute and -1 if they do not.
-    Paramters :
+    Parameters :
         string1 : str
             First Pauli string
         string2 : str
             Second Pauli string
-    Returns : 
+    Returns :
         ans : int
             ans = 1 if the two strings commute and ans = -1 if they anti commute.
     '''
@@ -327,6 +351,17 @@ def commute_or_anti_commute(string1, string2):
     return ans
 
 def symbolic_rho(n_qubits):
+    '''
+    Gives you the symbolic rho as well as the decomposition into pauli string components.
+    Parameters :
+        n_qubits : int
+            The number of qubits in the system.
+    Returns :
+        rho : sympy object
+            The symbolic form of rho
+        rho_decomposition : dict
+            Dictionary containing the components for each pauli string
+    '''
     paulis_strings = generate_all_pauli_strings(n_qubits)
     rho = 0
     rho_decomposition = {}

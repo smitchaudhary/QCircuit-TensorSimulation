@@ -22,4 +22,4 @@ for pauli_string in rho_decomposition:
 
 print(new_rho)
 print("here")
-print(new_rho//rho)
+print(new_rho/rho)
